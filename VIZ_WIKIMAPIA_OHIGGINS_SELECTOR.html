@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wikimapia por comuna · O'Higgins</title>
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<style>
+:root{
+  --navy:#1a2744;--navy-2:#22314f;--navy-3:#2c3d60;
+  --orange:#e8710a;--orange-soft:#f7a45c;
+  --line:rgba(255,255,255,.10);--txt:#e9edf4;--txt-dim:#9aa8bf;
+  --ok:#3fa373;--warn:#d94f4f;
+  --mono:ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+  --sans:"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font-family:var(--sans);background:var(--navy);color:var(--txt);
+  display:grid;grid-template-columns:370px 1fr;overflow:hidden}
+#panel{border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+header{padding:18px 20px 14px;border-bottom:1px solid var(--line)}
+header h1{margin:0;font-size:16px;font-weight:650}
+header h1 span{color:var(--orange)}
+header p{margin:6px 0 0;font-size:12px;line-height:1.45;color:var(--txt-dim)}
+#scroll{overflow-y:auto;padding:4px 20px 24px;flex:1;min-height:0}
+.block{padding:16px 0;border-bottom:1px solid var(--line)}
+.block:last-child{border-bottom:none}
+.step{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--orange);margin:0 0 10px;display:flex;align-items:center;gap:8px}
+.step b{background:var(--orange);color:var(--navy);border-radius:2px;padding:1px 5px;font-weight:700}
+label{display:block;font-size:11px;color:var(--txt-dim);margin:10px 0 5px}
+input[type=text],select{width:100%;background:var(--navy-2);border:1px solid var(--line);
+  color:var(--txt);padding:8px 10px;border-radius:4px;font-family:var(--mono);font-size:12px}
+select optgroup{background:var(--navy);color:var(--orange-soft);font-style:normal}
+select option{background:var(--navy-2);color:var(--txt)}
+input:focus,select:focus,button:focus-visible{outline:2px solid var(--orange);outline-offset:1px;border-color:transparent}
+button{width:100%;background:var(--orange);color:#1a1206;border:none;padding:10px;border-radius:4px;
+  font-weight:650;font-size:13px;cursor:pointer;font-family:var(--sans)}
+button:hover:not(:disabled){background:var(--orange-soft)}
+button:disabled{background:var(--navy-3);color:var(--txt-dim);cursor:not-allowed}
+button.ghost{background:transparent;border:1px solid var(--line);color:var(--txt-dim);font-weight:500;font-size:12px}
+button.ghost:hover:not(:disabled){border-color:var(--orange);color:var(--orange);background:transparent}
+.row{display:flex;gap:8px;margin-top:8px}
+.hint{font-size:11px;line-height:1.5;color:var(--txt-dim);margin:8px 0 0}
+.hint a{color:var(--orange-soft)}
+.status{font-family:var(--mono);font-size:11px;margin-top:10px;padding:7px 9px;border-radius:3px;
+  background:var(--navy-2);border-left:2px solid var(--navy-3);line-height:1.5;word-break:break-word}
+.status.ok{border-left-color:var(--ok)}
+.status.bad{border-left-color:var(--warn)}
+.status.work{border-left-color:var(--orange)}
+#bar{height:3px;background:var(--navy-2);border-radius:2px;overflow:hidden;margin-top:9px;display:none}
+#bar div{height:100%;width:0;background:var(--orange);transition:width .25s}
+.kpis{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.kpi{background:var(--navy-2);border-radius:4px;padding:9px 10px}
+.kpi b{display:block;font-family:var(--mono);font-size:19px;color:var(--orange);line-height:1.1}
+.kpi span{font-size:10px;color:var(--txt-dim);text-transform:uppercase;letter-spacing:.06em}
+.metric{display:flex;margin:2px 0 12px;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.metric button{border-radius:0;background:transparent;color:var(--txt-dim);font-size:11px;padding:6px 4px;font-weight:500}
+.metric button.on{background:var(--navy-3);color:var(--txt)}
+.crow{display:grid;grid-template-columns:92px 1fr 46px;gap:7px;align-items:center;padding:2px 0;cursor:pointer}
+.crow:hover .cname{color:var(--orange)}
+.cname{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ctrack{height:11px;background:var(--navy-2);border-radius:1px;overflow:hidden}
+.cfill{height:100%;background:var(--orange)}
+.cval{font-family:var(--mono);font-size:10px;color:var(--txt-dim);text-align:right}
+.crow.sel .cname{color:var(--orange);font-weight:600}
+.crow.sel .cfill{background:#fff}
+#map{position:relative;height:100vh}
+#tip{position:absolute;z-index:3;pointer-events:none;display:none;
+  background:rgba(26,39,68,.96);color:#fff;font-size:11px;line-height:1.35;
+  padding:5px 8px;border-radius:3px;transform:translate(12px,-50%);
+  max-width:230px;border:1px solid rgba(255,255,255,.14);
+  box-shadow:0 2px 8px rgba(0,0,0,.25)}
+#tip b{display:block;color:#f7a45c;font-weight:600}
+#tip span{color:#9aa8bf;font-size:10px}
+.legend{position:absolute;bottom:26px;left:12px;z-index:2;background:rgba(26,39,68,.94);
+  border:1px solid var(--line);border-radius:4px;padding:10px 12px;font-size:10px;color:var(--txt-dim)}
+.legend h4{margin:0 0 7px;font-size:10px;color:var(--txt);font-weight:600;text-transform:uppercase;letter-spacing:.08em}
+.legend i{width:26px;height:3px;display:inline-block;vertical-align:-1px;margin-right:6px}
+.legend div{margin:2px 0;font-family:var(--mono)}
+.maplibregl-popup-content{background:var(--navy);color:var(--txt);border:1px solid var(--line);
+  border-radius:4px;padding:10px 12px;font-family:var(--sans);font-size:12px;max-width:240px}
+.maplibregl-popup-content b{color:var(--orange);display:block;margin-bottom:3px}
+.maplibregl-popup-content a{color:var(--orange-soft);font-size:11px}
+.maplibregl-popup-tip{border-top-color:var(--navy)!important;border-bottom-color:var(--navy)!important}
+footer{padding:12px 20px;border-top:1px solid var(--line);font-size:10px;color:var(--txt-dim);line-height:1.5}
+footer a{color:var(--orange-soft)}
+@media(max-width:860px){body{grid-template-columns:1fr;grid-template-rows:1fr 45vh;overflow:auto}#map{height:45vh}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<aside id="panel">
+  <header>
+    <h1>Objetos de <span>Wikimapia</span> por comuna</h1>
+    <p>Región de O'Higgins. Los límites comunales se traen de OpenStreetMap al momento, no necesitas cargar nada.</p>
+  </header>
+
+  <div id="scroll">
+
+    <div class="block">
+      <p class="step"><b>1</b> Clave de la API</p>
+      <input type="text" id="key" value="example" spellcheck="false" placeholder="tu clave, o 'example'">
+      <label for="ritmo">Ritmo entre consultas a Wikimapia</label>
+      <select id="ritmo">
+        <option value="3200">Clave propia — 3,2 s</option>
+        <option value="30500">Clave 'example' — 30,5 s</option>
+      </select>
+      <p class="hint">Clave gratis en <a href="https://wikimapia.org/api/?action=my_keys" target="_blank" rel="noopener">wikimapia.org/api</a>. Con <code>example</code> las 33 comunas demoran cerca de 18 minutos.</p>
+      <label for="proxy">Proxy, solo si publicas esto en https</label>
+      <input type="text" id="proxy" spellcheck="false" placeholder="https://tu-proxy/?url=">
+      <div class="row"><button class="ghost" id="test">Probar la clave</button></div>
+      <div class="status" id="stKey">Sin probar.</div>
+      <p class="hint" id="diag"></p>
+    </div>
+
+    <div class="block">
+      <p class="step"><b>2</b> Comuna</p>
+      <select id="comuna"></select>
+      <label for="base">Mapa base</label>
+      <select id="base">
+        <option value="calles">Calles · CARTO Voyager</option>
+        <option value="osm">OpenStreetMap estándar</option>
+        <option value="claro">Claro · CARTO Positron</option>
+      </select>
+      <div class="row">
+        <button id="una">Consultar esta comuna</button>
+      </div>
+      <div class="row">
+        <button class="ghost" id="todas">Contar las 33</button>
+      </div>
+      <div id="bar"><div></div></div>
+      <div class="status" id="st">Elige una comuna y consulta.</div>
+      <p class="hint">Una comuna trae conteo más sus lugares (hasta <span id="maxp"></span> páginas de 100, filtrados contra el polígono). "Contar las 33" solo trae el conteo.</p>
+    </div>
+
+    <div class="block" id="res" style="display:none">
+      <p class="step"><b>3</b> Resultados</p>
+      <div class="kpis">
+        <div class="kpi"><b id="kTot">—</b><span>objetos</span></div>
+        <div class="kpi"><b id="kCom">—</b><span>comunas</span></div>
+      </div>
+      <div class="metric">
+        <button data-m="total" class="on">Total</button>
+        <button data-m="dens">Por 100 km²</button>
+      </div>
+      <div id="chart"></div>
+      <div class="row">
+        <button class="ghost" id="csv">CSV</button>
+        <button class="ghost" id="gjs">Puntos</button>
+        <button class="ghost" id="gpo">Contornos</button>
+      </div>
+    </div>
+
+  </div>
+
+  <footer>
+    Lugares: colaboradores de Wikimapia, CC BY-SA. Límites comunales: OpenStreetMap vía Nominatim, ODbL.
+    Base cartográfica: CARTO. El conteo se hace sobre el rectángulo envolvente; los puntos sí se filtran por el polígono.
+  </footer>
+</aside>
+
+<div id="map">
+  <div id="tip"></div>
+  <div class="legend" id="legend" style="display:none">
+    <h4 id="legTitle">Objetos por comuna</h4>
+    <div id="legItems"></div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   CONFIG
+   ============================================================ */
+const CONFIG = {
+  // El certificado de Wikimapia está emitido para wikimapia.org, no para api.wikimapia.org,
+  // así que https suele fallar por nombre inválido. Partimos en http y, si falla, probamos https.
+  api:"http://api.wikimapia.org/",
+  apiAlt:"https://api.wikimapia.org/",
+  nominatim:"https://nominatim.openstreetmap.org/search",
+  esperaOSM:1200,                       // Nominatim pide máximo 1 consulta por segundo
+  idioma:"es",
+  maxPaginas:3,
+  timeout:25000,
+  timeoutPrueba:7000,
+  estilo:"calles",
+  centro:[-71.2,-34.4], zoom:7.4,
+  rampa:["#fde4cd","#f9bd85","#f2913f","#d96f0b","#a34e00"],
+  // rectángulo generoso de la región, solo para descartar homónimos de otras regiones
+  guarda:[-72.4,-35.4,-69.8,-33.6]
+};
+document.getElementById("maxp").textContent = CONFIG.maxPaginas;
+
+/* Las 33 comunas por provincia. El texto entre paréntesis es lo que se le manda a Nominatim. */
+const COMUNAS = {
+  "Cachapoal":["Rancagua","Codegua","Coinco","Coltauco","Doñihue","Graneros","Las Cabras","Machalí",
+    "Malloa","Mostazal","Olivar","Peumo","Pichidegua","Quinta de Tilcoco","Rengo","Requínoa","San Vicente"],
+  "Colchagua":["San Fernando","Chépica","Chimbarongo","Lolol","Nancagua","Palmilla","Peralillo",
+    "Placilla","Pumanque","Santa Cruz"],
+  "Cardenal Caro":["Pichilemu","La Estrella","Litueche","Marchihue","Navidad","Paredones"]
+};
+
+const S = { com:{}, metrica:"total", sel:null, cortes:[], puntos:[] };
+const dormir = ms => new Promise(r=>setTimeout(r,ms));
+const esc = s => String(s||"").replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));
+
+/* ============================================================
+   SELECTOR
+   ============================================================ */
+const sel = document.getElementById("comuna");
+Object.entries(COMUNAS).forEach(([prov,lista])=>{
+  const g = document.createElement("optgroup");
+  g.label = "Provincia de " + prov;
+  lista.forEach(n=>{
+    const o = document.createElement("option");
+    o.value = n; o.textContent = n; g.appendChild(o);
+    S.com[n] = {nom:n, prov:prov, geom:null, bbox:null, area:0, found:null, puntos:[]};
+  });
+  sel.appendChild(g);
+});
+
+/* ============================================================
+   LÍMITES DESDE NOMINATIM
+   ============================================================ */
+async function limite(c){
+  if(c.geom) return c;
+  const q = new URLSearchParams({
+    q: `${c.nom}, Provincia de ${c.prov}, Región de O'Higgins, Chile`,
+    format:"jsonv2", polygon_geojson:"1", limit:"8",
+    countrycodes:"cl", "accept-language":"es"
+  });
+  const r = await fetch(CONFIG.nominatim + "?" + q.toString());
+  if(!r.ok) throw new Error("Nominatim respondió "+r.status);
+  const lista = await r.json();
+
+  const bueno = lista.find(x=>{
+    if(!x.geojson || !/Polygon/.test(x.geojson.type)) return false;
+    if(x.category !== "boundary") return false;
+    const [la0,la1,lo0,lo1] = x.boundingbox.map(Number);
+    const cx = (lo0+lo1)/2, cy = (la0+la1)/2;
+    return cx>CONFIG.guarda[0] && cx<CONFIG.guarda[2] && cy>CONFIG.guarda[1] && cy<CONFIG.guarda[3];
+  });
+  if(!bueno) throw new Error(`OSM no devolvió un límite válido para ${c.nom}.`);
+
+  c.geom = bueno.geojson;
+  c.bbox = bboxDe(c.geom);
+  c.area = areaKm2(c.geom);
+  return c;
+}
+
+/* ============================================================
+   WIKIMAPIA · transporte con descubrimiento automático
+   ------------------------------------------------------------
+   La API es vieja y no es clara sobre cómo envuelve el JSONP,
+   así que probamos combinaciones de esquema y formato hasta que
+   una responda, y después nos quedamos con esa.
+   ============================================================ */
+let cbN = 0;
+const enHttps = location.protocol === "https:";
+const proxyActivo = ()=>document.getElementById("proxy").value.trim();
+
+const BASES = [CONFIG.api, CONFIG.apiAlt];
+const MODOS = [
+  {id:"jsonp + jsoncallback", fmt:"jsonp", cb:"jsoncallback"},
+  {id:"jsonp + callback",     fmt:"jsonp", cb:"callback"},
+  {id:"json + jsoncallback",  fmt:"json",  cb:"jsoncallback"},
+  {id:"fetch directo",        fmt:"json",  cb:null}
+];
+S.combo = null;   // la combinación que funcionó
+
+function urlWM(params, base, modo, cb){
+  const q = new URLSearchParams(Object.assign({
+    key: document.getElementById("key").value.trim()||"example",
+    format: modo.fmt, language: CONFIG.idioma
+  }, params));
+  if(modo.cb && cb) q.set(modo.cb, cb);
+  return base + "?" + q.toString();
+}
+
+function jsonp(url, cb, espera){
+  return new Promise((resolve,reject)=>{
+    const s = document.createElement("script");
+    let listo = false;
+    const limpiar = ()=>{clearTimeout(t);delete window[cb];s.remove()};
+    const t = setTimeout(()=>{if(!listo){listo=true;limpiar();
+      reject(new Error("sin respuesta en "+(espera/1000)+" s"))}},espera);
+    window[cb] = d=>{if(!listo){listo=true;limpiar();resolve(d)}};
+    s.onerror = ()=>{if(!listo){listo=true;limpiar();
+      reject(new Error("el navegador rechazó la respuesta"))}};
+    s.src = url;
+    document.body.appendChild(s);
+  });
+}
+
+async function intento(params, base, modo, espera){
+  if(!modo.cb){
+    const r = await fetch(urlWM(params, base, modo, null));
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    return await r.json();
+  }
+  const cb = "wmcb_"+(++cbN);
+  return jsonp(urlWM(params, base, modo, cb), cb, espera);
+}
+
+function anotarModo(){
+  const d = document.getElementById("diag");
+  if(S.combo) d.innerHTML = `Conectado por <code>${S.combo.base.split(":")[0]}</code>, modo <code>${S.combo.modo.id}</code>.`;
+}
+
+async function wm(params){
+  const px = proxyActivo();
+
+  // Con proxy: petición normal, sin JSONP.
+  if(px){
+    const modo = {fmt:"json", cb:null};
+    const r = await fetch(px + encodeURIComponent(urlWM(params, CONFIG.api, modo, null)));
+    if(!r.ok) throw new Error("El proxy respondió "+r.status+".");
+    const t = await r.text();
+    try{ return JSON.parse(t); }
+    catch(e){ throw new Error("El proxy no devolvió JSON. Revisa que entregue el cuerpo crudo."); }
+  }
+
+  // Ya sabemos qué combinación sirve.
+  if(S.combo) return intento(params, S.combo.base, S.combo.modo, CONFIG.timeout);
+
+  // Descubrimiento: espera corta para no eternizar el barrido.
+  const fallos = [];
+  for(const base of BASES){
+    if(enHttps && base.startsWith("http:")){
+      fallos.push("http bloqueado por estar sirviendo en https");
+      continue;
+    }
+    for(const modo of MODOS){
+      try{
+        const d = await intento(params, base, modo, CONFIG.timeoutPrueba);
+        S.combo = {base, modo};
+        anotarModo();
+        return d;
+      }catch(e){
+        fallos.push(`${base.split(":")[0]} · ${modo.id}: ${e.message}`);
+      }
+    }
+  }
+  throw new Error("Ninguna combinación respondió. " + fallos.join(" | "));
+}
+
+async function caja(bbox,page,count,conGeom){
+  const p = {function:"box",coordsby:"bbox",bbox:bbox.join(","),page:page,count:count};
+  if(!conGeom) p.disable = "location,polygon";
+  const d = await wm(p);
+  if(d && d.debug && d.debug.message) throw new Error(d.debug.message);
+  return {found:parseInt(d&&d.found,10)||0, items:(d&&d.folder)||[]};
+}
+
+/* ============================================================
+   GEOMETRÍA
+   ============================================================ */
+function anillos(g){
+  if(!g) return [];
+  if(g.type==="Polygon") return [g.coordinates];
+  if(g.type==="MultiPolygon") return g.coordinates;
+  return [];
+}
+function bboxDe(g){
+  let x0=180,y0=90,x1=-180,y1=-90;
+  anillos(g).forEach(p=>p[0].forEach(([x,y])=>{
+    if(x<x0)x0=x; if(y<y0)y0=y; if(x>x1)x1=x; if(y>y1)y1=y;}));
+  return [x0,y0,x1,y1];
+}
+function areaKm2(g){
+  let total=0;
+  anillos(g).forEach(poly=>poly.forEach((ring,i)=>{
+    const latRef = ring.reduce((s,p)=>s+p[1],0)/ring.length;
+    const kx = 111.320*Math.cos(latRef*Math.PI/180), ky = 110.574;
+    let a=0;
+    for(let j=0,k=ring.length-1;j<ring.length;k=j++)
+      a += (ring[k][0]*kx*ring[j][1]*ky) - (ring[j][0]*kx*ring[k][1]*ky);
+    total += (i===0?1:-1)*Math.abs(a/2);
+  }));
+  return total;
+}
+function dentro(lon,lat,g){
+  for(const poly of anillos(g)){
+    let en=false;
+    for(let r=0;r<poly.length;r++){
+      const ring=poly[r]; let cruza=false;
+      for(let i=0,j=ring.length-1;i<ring.length;j=i++){
+        const xi=ring[i][0],yi=ring[i][1],xj=ring[j][0],yj=ring[j][1];
+        if(((yi>lat)!==(yj>lat)) && (lon<(xj-xi)*(lat-yi)/(yj-yi)+xi)) cruza=!cruza;
+      }
+      if(r===0){ if(!cruza) break; en=true; }
+      else if(cruza){ en=false; break; }
+    }
+    if(en) return true;
+  }
+  return false;
+}
+
+/* ============================================================
+   MAPA
+   ============================================================ */
+const ESTILOS = {
+  calles:{url:"https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json"},
+  claro :{url:"https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"},
+  osm   :{raster:true}
+};
+function specDe(id){
+  const e = ESTILOS[id] || ESTILOS.calles;
+  if(!e.raster) return e.url;
+  return {version:8,
+    sources:{osm:{type:"raster",tiles:["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+      tileSize:256,maxzoom:19,attribution:"© colaboradores de OpenStreetMap"}},
+    layers:[{id:"osm",type:"raster",source:"osm"}]};
+}
+
+const map = new maplibregl.Map({container:"map", style:specDe(CONFIG.estilo),
+  center:CONFIG.centro, zoom:CONFIG.zoom, attributionControl:false});
+map.addControl(new maplibregl.AttributionControl({compact:true}));
+map.addControl(new maplibregl.NavigationControl({showCompass:false}),"top-right");
+
+let listoMapa = false;
+const vacio = ()=>({type:"FeatureCollection",features:[]});
+const CAPAS_WM = ["poli-fill","puntos"];
+
+/* Las capas se rearman cada vez que cambia el mapa base. */
+function armarCapas(){
+  if(map.getSource("comunas")) return;
+
+  // Límites comunales: solo línea. El color codifica la métrica.
+  map.addSource("comunas",{type:"geojson",data:vacio()});
+  map.addLayer({id:"comunas-hit",type:"fill",source:"comunas",paint:{"fill-opacity":0}});
+  map.addLayer({id:"comunas-borde",type:"line",source:"comunas",
+    paint:{"line-color":"#1a2744","line-width":3.4,"line-opacity":.2}});
+  map.addLayer({id:"comunas-linea",type:"line",source:"comunas",
+    paint:{"line-color":["coalesce",["get","_color"],"#8b96a8"],"line-width":1.8}});
+  map.addLayer({id:"comunas-sel",type:"line",source:"comunas",filter:["==","_nom","___"],
+    paint:{"line-color":"#1a2744","line-width":2.6,"line-dasharray":[2,1.4]}});
+
+  // Lugares de Wikimapia
+  map.addSource("poligonos",{type:"geojson",data:vacio(),generateId:true});
+  map.addLayer({id:"poli-fill",type:"fill",source:"poligonos",
+    paint:{"fill-color":"#e8710a",
+      "fill-opacity":["case",["boolean",["feature-state","hover"],false],.55,.25]}});
+  map.addLayer({id:"poli-linea",type:"line",source:"poligonos",
+    paint:{"line-color":"#a34e00",
+      "line-width":["case",["boolean",["feature-state","hover"],false],2.2,1]}});
+
+  map.addSource("puntos",{type:"geojson",data:vacio(),generateId:true});
+  map.addLayer({id:"puntos",type:"circle",source:"puntos",
+    paint:{
+      "circle-radius":["case",
+        ["boolean",["feature-state","hover"],false],7,
+        ["get","poli"],["interpolate",["linear"],["zoom"],8,1.6,12,2.4,15,3],
+        ["interpolate",["linear"],["zoom"],8,2.4,12,4,15,6]],
+      "circle-color":["case",["boolean",["feature-state","hover"],false],"#e8710a","#1a2744"],
+      "circle-opacity":["case",["get","poli"],.5,.9],
+      "circle-stroke-width":["case",["get","poli"],0,1],
+      "circle-stroke-color":"#fff"}});
+}
+
+map.on("load",()=>{ listoMapa = true; armarCapas(); pintar(); });
+
+document.getElementById("base").onchange = e=>{
+  map.setStyle(specDe(e.target.value));
+  map.once("styledata",()=>{ armarCapas(); pintar(); dibujarPuntos(); });
+};
+
+/* ---------- interacción: un solo juego de manejadores ---------- */
+const tip = document.getElementById("tip");
+let resaltado = null;
+
+function limpiarResalte(){
+  if(resaltado) map.setFeatureState(resaltado,{hover:false});
+  resaltado = null;
+}
+function bajoElCursor(pt, capas){
+  const hay = capas.filter(c=>map.getLayer(c));
+  return hay.length ? map.queryRenderedFeatures(pt,{layers:hay}) : [];
+}
+
+map.on("mousemove", e=>{
+  const wm = bajoElCursor(e.point, CAPAS_WM);
+  if(wm.length){
+    const f = wm[0];
+    if(!resaltado || resaltado.id !== f.id || resaltado.source !== f.source){
+      limpiarResalte();
+      resaltado = {source:f.source, id:f.id};
+      map.setFeatureState(resaltado,{hover:true});
+    }
+    tip.style.display = "block";
+    tip.style.left = e.point.x + "px";
+    tip.style.top  = e.point.y + "px";
+    tip.innerHTML = `<b>${esc(f.properties.nombre)}</b><span>${esc(f.properties.comuna)}</span>`;
+    map.getCanvas().style.cursor = "pointer";
+    return;
+  }
+  limpiarResalte();
+  const co = bajoElCursor(e.point, ["comunas-hit"]);
+  if(co.length){
+    const c = S.com[co[0].properties._nom];
+    tip.style.display = "block";
+    tip.style.left = e.point.x + "px";
+    tip.style.top  = e.point.y + "px";
+    tip.innerHTML = `<b>${esc(co[0].properties._nom)}</b><span>${
+      c && c.found!==null ? c.found.toLocaleString("es-CL")+" objetos" : "sin consultar"}</span>`;
+    map.getCanvas().style.cursor = "pointer";
+  }else{
+    tip.style.display = "none";
+    map.getCanvas().style.cursor = "";
+  }
+});
+map.on("mouseout",()=>{ tip.style.display="none"; limpiarResalte(); });
+
+map.on("click", e=>{
+  // Un lugar de Wikimapia solo abre su ficha: nunca recentra el mapa.
+  const wm = bajoElCursor(e.point, CAPAS_WM);
+  if(wm.length){
+    const p = wm[0].properties;
+    new maplibregl.Popup({closeButton:false}).setLngLat(e.lngLat)
+      .setHTML(`<b>${esc(p.nombre)}</b><div style="font-size:11px;color:#9aa8bf">${esc(p.comuna)}</div>
+        ${p.url?`<a href="${p.url}" target="_blank" rel="noopener">Ver en Wikimapia →</a>`:""}`)
+      .addTo(map);
+    return;
+  }
+  const co = bajoElCursor(e.point, ["comunas-hit"]);
+  if(co.length) elegir(co[0].properties._nom);
+});
+
+function pintar(){
+  if(!listoMapa || !map.getSource("comunas")) return;
+  const cargadas = Object.values(S.com).filter(c=>c.geom);
+  const vals = cargadas.map(valor).filter(v=>v!==null);
+  S.cortes = vals.length>=3 ? quintiles(vals) : [];
+  map.getSource("comunas").setData({type:"FeatureCollection",
+    features:cargadas.map(c=>({type:"Feature",geometry:c.geom,
+      properties:{_nom:c.nom,_color:color(valor(c))}}))});
+  map.setFilter("comunas-sel",["==","_nom",S.sel||"___"]);
+  leyenda();
+}
+const valor = c => c.found===null ? null : (S.metrica==="total" ? c.found : c.found/c.area*100);
+function quintiles(v){
+  const s=[...v].sort((a,b)=>a-b), out=[];
+  for(let i=1;i<5;i++) out.push(s[Math.floor(i*s.length/5)]);
+  return [...new Set(out)];
+}
+function color(v){
+  if(v===null || !S.cortes.length) return "#dfe3ea";
+  let i=0; while(i<S.cortes.length && v>=S.cortes[i]) i++;
+  return CONFIG.rampa[Math.min(i,CONFIG.rampa.length-1)];
+}
+function leyenda(){
+  const box=document.getElementById("legend");
+  if(!S.cortes.length){box.style.display="none";return}
+  box.style.display="block";
+  document.getElementById("legTitle").textContent =
+    S.metrica==="total" ? "Objetos por comuna" : "Objetos por 100 km²";
+  const f = n => S.metrica==="total" ? Math.round(n) : n.toFixed(1);
+  const lim=[null,...S.cortes,null];
+  document.getElementById("legItems").innerHTML =
+    CONFIG.rampa.slice(0,S.cortes.length+1).map((c,i)=>{
+      const a=lim[i], b=lim[i+1];
+      const t = a===null?`< ${f(b)}` : b===null?`≥ ${f(a)}` : `${f(a)} – ${f(b)}`;
+      return `<div><i style="background:${c}"></i>${t}</div>`;
+    }).join("");
+}
+
+/* ============================================================
+   ACCIONES
+   ============================================================ */
+function estado(id,txt,cls){
+  const e=document.getElementById(id);
+  e.textContent=txt; e.className="status"+(cls?" "+cls:"");
+}
+function bloquear(v){
+  document.getElementById("una").disabled=v;
+  document.getElementById("todas").disabled=v;
+}
+
+document.getElementById("test").onclick = async ()=>{
+  estado("stKey","Consultando…","work");
+  S.combo = null;
+  const diag = document.getElementById("diag");
+  diag.innerHTML = "";
+  try{
+    const r = await caja(CONFIG.guarda,1,5,false);
+    estado("stKey",`Responde. ${r.found.toLocaleString("es-CL")} objetos en el rectángulo regional.`,"ok");
+    anotarModo();
+  }catch(e){
+    estado("stKey",e.message,"bad");
+    const crudo = urlWM({function:"box",coordsby:"bbox",bbox:CONFIG.guarda.join(","),page:1,count:5}, CONFIG.api, MODOS[0], "prueba");
+    diag.innerHTML = `Abre <a href="${crudo}" target="_blank" rel="noopener">esta consulta en una pestaña</a>.
+      Si ves JSON, el problema es del navegador, no de la API. Estás sirviendo desde
+      <code>${location.protocol}</code>.`;
+  }
+};
+
+document.getElementById("una").onclick = ()=>consultarUna(sel.value);
+
+async function consultarUna(nom){
+  const c = S.com[nom];
+  bloquear(true);
+  try{
+    if(!c.geom){ estado("st",`Buscando el límite de ${nom} en OSM…`,"work"); await limite(c); pintar(); }
+    S.sel = nom; sel.value = nom;
+    map.fitBounds([[c.bbox[0],c.bbox[1]],[c.bbox[2],c.bbox[3]]],{padding:60,duration:600});
+
+    estado("st",`Consultando Wikimapia en ${nom}…`,"work");
+    const espera = parseInt(document.getElementById("ritmo").value,10);
+    const r1 = await caja(c.bbox,1,100,true);
+    c.found = r1.found;
+    c.puntos = [];
+    sumar(c, r1.items);
+    for(let p=2;p<=CONFIG.maxPaginas && (p-1)*100 < r1.found;p++){
+      await dormir(espera);
+      const rp = await caja(c.bbox,p,100,true);
+      sumar(c, rp.items);
+    }
+    dibujarPuntos(); pintar(); tabla();
+    const conP = c.puntos.filter(p=>p.geom).length;
+    estado("st",`${nom}: ${c.found.toLocaleString("es-CL")} en el rectángulo, ${c.puntos.length} dentro de la comuna, ${conP} con contorno.`,"ok");
+  }catch(e){
+    estado("st",e.message,"bad");
+  }
+  bloquear(false);
+}
+
+/* Wikimapia entrega el contorno como [{x:lon, y:lat}, …], sin cerrar. */
+function aPoligono(it){
+  const p = it.polygon;
+  if(!Array.isArray(p) || p.length < 3) return null;
+  const ring = p.map(v=>[+v.x,+v.y]).filter(c=>isFinite(c[0])&&isFinite(c[1]));
+  if(ring.length < 3) return null;
+  const a = ring[0], z = ring[ring.length-1];
+  if(a[0]!==z[0] || a[1]!==z[1]) ring.push([a[0],a[1]]);
+  return {type:"Polygon",coordinates:[ring]};
+}
+
+function sumar(c,items){
+  items.forEach(it=>{
+    const lo = it.location||{};
+    let lon = +lo.lon, lat = +lo.lat;
+    const geom = aPoligono(it);
+    // si no vino centroide pero sí contorno, lo calculamos del contorno
+    if((!isFinite(lon)||!isFinite(lat)) && geom){
+      const r = geom.coordinates[0];
+      lon = r.reduce((s,q)=>s+q[0],0)/r.length;
+      lat = r.reduce((s,q)=>s+q[1],0)/r.length;
+    }
+    if(!isFinite(lon)||!isFinite(lat)) return;
+    if(!dentro(lon,lat,c.geom)) return;
+    c.puntos.push({lon,lat,geom,nombre:it.name||"(sin nombre)",url:it.url||"",comuna:c.nom});
+  });
+}
+function dibujarPuntos(){
+  S.puntos = Object.values(S.com).flatMap(c=>c.puntos);
+  if(!listoMapa) return;
+  if(!map.getSource("puntos")) return;
+  const props = p => ({nombre:p.nombre,url:p.url,comuna:p.comuna,poli:!!p.geom});
+  map.getSource("puntos").setData({type:"FeatureCollection",
+    features:S.puntos.map(p=>({type:"Feature",
+      geometry:{type:"Point",coordinates:[p.lon,p.lat]},
+      properties:props(p)}))});
+  map.getSource("poligonos").setData({type:"FeatureCollection",
+    features:S.puntos.filter(p=>p.geom).map(p=>({type:"Feature",
+      geometry:p.geom, properties:props(p)}))});
+}
+
+document.getElementById("todas").onclick = async ()=>{
+  const lista = Object.values(S.com);
+  const espera = parseInt(document.getElementById("ritmo").value,10);
+  const min = Math.round(lista.length*(espera+CONFIG.esperaOSM)/60000);
+  if(!confirm(`Son ${lista.length} comunas, cerca de ${min} minutos. ¿Seguimos?`)) return;
+
+  bloquear(true);
+  const bar = document.getElementById("bar");
+  bar.style.display="block";
+  let fallas=0;
+
+  for(let i=0;i<lista.length;i++){
+    const c = lista[i];
+    bar.firstElementChild.style.width = (i/lista.length*100)+"%";
+    estado("st",`${i+1}/${lista.length} · ${c.nom}`,"work");
+    try{
+      if(!c.geom){ await limite(c); await dormir(CONFIG.esperaOSM); }
+      const r = await caja(c.bbox,1,5,false);
+      c.found = r.found;
+    }catch(e){
+      fallas++;
+      if(fallas===1) estado("st",`Falló en ${c.nom}: ${e.message}`,"bad");
+    }
+    pintar(); tabla();
+    if(i<lista.length-1) await dormir(espera);
+  }
+
+  bar.firstElementChild.style.width="100%";
+  setTimeout(()=>bar.style.display="none",500);
+  bloquear(false);
+  const ok = lista.filter(c=>c.found!==null).length;
+  estado("st", fallas ? `${ok} de ${lista.length} comunas, ${fallas} sin respuesta. Puedes repetir para completarlas.`
+                      : `Listo: ${ok} comunas.`, fallas?"bad":"ok");
+};
+
+function elegir(nom){
+  S.sel = nom; sel.value = nom;
+  const c = S.com[nom];
+  if(c && c.bbox) map.fitBounds([[c.bbox[0],c.bbox[1]],[c.bbox[2],c.bbox[3]]],{padding:60,duration:600});
+  pintar(); tabla();
+}
+
+/* ============================================================
+   GRÁFICO Y EXPORTES
+   ============================================================ */
+function tabla(){
+  const listas = Object.values(S.com).filter(c=>c.found!==null);
+  if(!listas.length) return;
+  document.getElementById("res").style.display="block";
+  document.getElementById("kTot").textContent = listas.reduce((s,c)=>s+c.found,0).toLocaleString("es-CL");
+  document.getElementById("kCom").textContent = listas.length;
+
+  const orden = [...listas].sort((a,b)=>valor(b)-valor(a));
+  const max = valor(orden[0])||1;
+  const f = n => S.metrica==="total" ? Math.round(n).toLocaleString("es-CL") : n.toFixed(1);
+  document.getElementById("chart").innerHTML = orden.map(c=>`
+    <div class="crow ${S.sel===c.nom?"sel":""}" data-n="${esc(c.nom)}">
+      <span class="cname" title="${esc(c.nom)}">${esc(c.nom)}</span>
+      <span class="ctrack"><span class="cfill" style="width:${Math.max(2,valor(c)/max*100)}%"></span></span>
+      <span class="cval">${f(valor(c))}</span>
+    </div>`).join("");
+  document.querySelectorAll(".crow").forEach(r=>r.onclick=()=>elegir(r.dataset.n));
+}
+
+document.querySelectorAll(".metric button").forEach(b=>{
+  b.onclick = ()=>{
+    document.querySelectorAll(".metric button").forEach(x=>x.classList.remove("on"));
+    b.classList.add("on"); S.metrica = b.dataset.m; pintar(); tabla();
+  };
+});
+
+function bajar(nombre,texto,tipo){
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob(["\ufeff"+texto],{type:tipo}));
+  a.download=nombre; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+}
+document.getElementById("csv").onclick = ()=>{
+  const filas=[["comuna","provincia","objetos_bbox","area_km2","objetos_por_100km2","puntos_en_poligono","con_contorno"]];
+  Object.values(S.com).filter(c=>c.found!==null).forEach(c=>filas.push([
+    `"${c.nom}"`,`"${c.prov}"`,c.found,c.area.toFixed(1),(c.found/c.area*100).toFixed(2),c.puntos.length,c.puntos.filter(p=>p.geom).length]));
+  bajar("wikimapia_comunas_ohiggins.csv",filas.map(r=>r.join(";")).join("\n"),"text/csv;charset=utf-8");
+};
+document.getElementById("gpo").onclick = ()=>{
+  const con = S.puntos.filter(p=>p.geom);
+  if(!con.length) return estado("st","Ningún lugar cargado trae contorno. Consulta una comuna primero.","bad");
+  bajar("wikimapia_contornos.geojson", JSON.stringify({type:"FeatureCollection",
+    features:con.map(p=>({type:"Feature", geometry:p.geom,
+      properties:{nombre:p.nombre,comuna:p.comuna,url:p.url}}))}),"application/geo+json");
+};
+document.getElementById("gjs").onclick = ()=>{
+  if(!S.puntos.length) return estado("st","Todavía no hay puntos. Consulta una comuna primero.","bad");
+  bajar("wikimapia_puntos.geojson", JSON.stringify({type:"FeatureCollection",
+    features:S.puntos.map(p=>({type:"Feature",
+      geometry:{type:"Point",coordinates:[p.lon,p.lat]},
+      properties:{nombre:p.nombre,comuna:p.comuna,url:p.url}}))}),"application/geo+json");
+};
+</script>
+</body>
+</html>
