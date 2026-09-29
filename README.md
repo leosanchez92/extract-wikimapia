@@ -1,5 +1,7 @@
 # Visor de Wikimapia por comuna — O'Higgins
 
+![HTML5](https://img.shields.io/badge/HTML5-E34F26?style=flat-square&logo=html5&logoColor=white) ![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=flat-square&logo=javascript&logoColor=black) ![OpenStreetMap](https://img.shields.io/badge/OpenStreetMap-7EBC6F?style=flat-square&logo=openstreetmap&logoColor=white)
+
 Herramienta web **autocontenida** que consulta la **API de Wikimapia** y muestra
 los objetos (lugares) registrados por cada una de las 33 comunas de la Región de
 O'Higgins, sobre un mapa. Los límites comunales se obtienen al vuelo desde
